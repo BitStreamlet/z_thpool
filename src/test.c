@@ -2,26 +2,59 @@
 #include "z_debug.h"
 #include "z_thpool.h"
 
+#define MAX_POOLS 10
+
 // Help text for command-line interface
 static const char *gs_help =
     "\r\n"
     "Enter a command (type 'exit' to quit):\r\n\r\n"
-    "start 5 100 64  #Start with 10 threads, 50 cache queues, set the thread stack 64k size.\r\n"
-    "stop            #Stop. \r\n"
-    "add 10          #Add 10 threads \r\n"
-    "test            #Test thpool \r\n"
-    "show            #Show thpool state \r\n"
-    "help            #Help \r\n";
+    "create pool1 5 100 64  #Create pool named 'pool1' with 5 threads, 100 cache queues, 64k stack size\r\n"
+    "destroy pool1          #Destroy pool named 'pool1'\r\n"
+    "add pool1 10           #Add 10 tasks to pool named 'pool1'\r\n"
+    "show pool1             #Show state of pool named 'pool1'\r\n"
+    "test                   #Run test suite\r\n"
+    "help                   #Show this help\r\n";
 
-// Simulate a task by sleeping for 1 seconds; used in threading tests
+// Structure to track thread pools
+struct pool_entry {
+    char name[32];
+    z_thpool_handle_t handle;
+    int in_use;
+};
+
+// Array of thread pools
+static struct pool_entry gs_pools[MAX_POOLS] = {0};
+
+// Simulate a task by sleeping for 1 second
 static void test_task_cb(void *p_arg) {
     sleep(1); // Simulating task processing time
 }
 
+// Find a pool by name
+static struct pool_entry *find_pool(const char *name) {
+    for (int i = 0; i < MAX_POOLS; i++) {
+        if (gs_pools[i].in_use && strcmp(gs_pools[i].name, name) == 0) {
+            return &gs_pools[i];
+        }
+    }
+    return NULL;
+}
+
+// Find an empty pool slot
+static struct pool_entry *find_empty_slot(void) {
+    for (int i = 0; i < MAX_POOLS; i++) {
+        if (!gs_pools[i].in_use) {
+            return &gs_pools[i];
+        }
+    }
+    return NULL;
+}
+
 int main(int argc, char *argv[]) {
-    char input[256];   // Buffer to hold user input
-    char command[256]; // Command read from user input
-    int a, b, c;       // Variables for command parameters
+    char input[256];
+    char command[32];
+    char pool_name[32];
+    int a, b, c;
 
     printf("Enter a command (type 'exit' to quit):\n");
 
@@ -32,47 +65,82 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // Remove trailing newline character from input
         input[strcspn(input, "\n")] = '\0';
 
-        // Parse the command from the input string
-        if (sscanf(input, "%s %d %d %d", command, &a, &b, &c) >= 1) {
-            if (strcmp(command, "exit") == 0) {
-                // Exit the program
-                printf("Exiting program.\n");
-                break;
-            } else if (strcmp(command, "start") == 0) {
-                // Start the thread pool with specified configuration
-                struct z_thpool_config_struct t_conftg;
-                t_conftg.max_thread_nums = a;
-                t_conftg.msg_node_max = b;
-                t_conftg.thread_stack_size = c * 1024; // Convert stack size to bytes
-                z_thpool_start(&t_conftg);
-            } else if (strcmp(command, "stop") == 0) {
-                // Stop the thread pool
-                z_thpool_exit();
-            } else if (strcmp(command, "add") == 0) {
-                // Add the specified number of threads using the test task callback
-                for (int i = 0; i < a; i++) {
-                    if (z_thpool_add_work(test_task_cb, &i)) {
-                        break; // Exit loop if adding work fails
-                    }
+        if (strcmp(input, "exit") == 0) {
+            printf("Exiting program.\n");
+            break;
+        } else if (strcmp(input, "help") == 0) {
+            printf("%s", gs_help);
+            continue;
+        } else if (strcmp(input, "test") == 0) {
+            z_thpool_test();
+            continue;
+        }
+
+        // Parse commands with pool name
+        if (sscanf(input, "%s %s %d %d %d", command, pool_name, &a, &b, &c) >= 2) {
+            if (strcmp(command, "create") == 0) {
+                struct pool_entry *entry = find_empty_slot();
+                if (!entry) {
+                    printf("Error: Maximum number of pools reached\n");
+                    continue;
                 }
-            } else if (strcmp(command, "test") == 0) {
-                // Run a test suite for the thread pool
-                z_thpool_test();
-                break;
-            } else if (strcmp(command, "show") == 0) {
-                // Display the current state of the thread pool
-                z_thpool_cmd_shell_show();
-            } else if (strcmp(command, "help") == 0) {
-                // Display help information
-                printf("%s", gs_help);
+
+                struct z_thpool_config_struct config;
+                config.max_thread_nums = a;
+                config.msg_node_max = b;
+                config.thread_stack_size = c * 1024;
+                strncpy(config.pool_name, pool_name, sizeof(config.pool_name) - 1);
+                config.pool_name[sizeof(config.pool_name) - 1] = '\0';
+
+                z_thpool_handle_t handle;
+                if (z_thpool_create(&config, &handle) == 0) {
+                    strncpy(entry->name, pool_name, sizeof(entry->name) - 1);
+                    entry->name[sizeof(entry->name) - 1] = '\0';
+                    entry->handle = handle;
+                    entry->in_use = 1;
+                    printf("Created thread pool '%s'\n", pool_name);
+                } else {
+                    printf("Failed to create thread pool\n");
+                }
             } else {
-                // Display help information if command is unknown
-                printf("%s", gs_help);
+                struct pool_entry *entry = find_pool(pool_name);
+                if (!entry) {
+                    printf("Error: Pool '%s' not found\n", pool_name);
+                    continue;
+                }
+
+                if (strcmp(command, "destroy") == 0) {
+                    z_thpool_destroy(entry->handle);
+                    entry->in_use = 0;
+                    printf("Destroyed thread pool '%s'\n", pool_name);
+                } else if (strcmp(command, "add") == 0) {
+                    for (int i = 0; i < a; i++) {
+                        if (z_thpool_add_work(entry->handle, test_task_cb, &i) != 0) {
+                            printf("Failed to add task %d\n", i);
+                            break;
+                        }
+                        printf("Added task %d to pool '%s'\n", i, pool_name);
+                    }
+                } else if (strcmp(command, "show") == 0) {
+                    z_thpool_cmd_shell_show(entry->handle);
+                } else {
+                    printf("%s", gs_help);
+                }
             }
+        } else {
+            printf("%s", gs_help);
         }
     }
+
+    // Cleanup any remaining pools
+    for (int i = 0; i < MAX_POOLS; i++) {
+        if (gs_pools[i].in_use) {
+            z_thpool_destroy(gs_pools[i].handle);
+            gs_pools[i].in_use = 0;
+        }
+    }
+
     return 0;
 }
