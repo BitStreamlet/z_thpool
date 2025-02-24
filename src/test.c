@@ -141,6 +141,6 @@ int main(int argc, char *argv[]) {
             gs_pools[i].in_use = 0;
         }
     }
-
+    z_tool_malloc_info();
     return 0;
 }

@@ -16,7 +16,7 @@ TEST_LIB = $(LIBDIR)/libtestlib.a
 TEST_PROGRAM =  $(BUILD)/z_thpool_test
 
 # Compiler and linker flags
-CFLAGS = -I$(INCDIR)
+CFLAGS = -std=c99 -I$(INCDIR) -D_DEFAULT_SOURCE
 LDFLAGS = -L$(LIBDIR) -lz_thpool -ltestlib -lpthread
 
 # List all source files

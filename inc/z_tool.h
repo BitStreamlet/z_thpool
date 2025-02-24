@@ -40,6 +40,7 @@ extern "C" {
 #include <termios.h>      // Terminal I/O control functions
 #include <time.h>         // Time operations
 #include <unistd.h>       // System call functions
+#include <pthread.h>
 
 // Utility macros for stringifying and alignment operations
 #define Z_TOOL_STRINGIFY(x) #x
@@ -69,7 +70,7 @@ extern "C" {
 #define Z_TOOL_ABS(x) ((x) >= 0 ? (x) : (-(x)))
 
 // Function to calculate the next power of two for a given number
-static inline uint32_t Z_TOOL_roundup_pow_of_two(uint32_t n) {
+static inline uint32_t Z_TOOL_ROUNDUP_POW_OF_TWO(uint32_t n) {
     if (n == 0) return 1;
     n--;
     n |= n >> 1;
@@ -79,6 +80,55 @@ static inline uint32_t Z_TOOL_roundup_pow_of_two(uint32_t n) {
     n |= n >> 16;
     return n + 1;
 }
+
+
+#define z_tool_malloc(sz)                                                           \
+                                                                                \
+    ({                                                                          \
+        static void *objp;                                                      \
+        objp = _z_tool_malloc((sz), (__FILE__), (__FUNCTION__), (__LINE__), &objp); \
+        objp;                                                                   \
+    })
+
+#define z_tool_free(objp)                                                 \
+                                                                      \
+    ({                                                                \
+        if (objp) {                                                   \
+            _z_tool_free((objp), (__FILE__), (__FUNCTION__), (__LINE__)); \
+        }                                                             \
+    })
+
+#define z_tool_realloc(old_objp, sz)                                                             \
+                                                                                             \
+    ({                                                                                       \
+        static void *objp;                                                                   \
+        objp = _z_tool_realloc((old_objp), (sz), (__FILE__), (__FUNCTION__), (__LINE__), &objp); \
+        objp;                                                                                \
+    })
+
+#define z_tool_calloc(num, sz)                                                             \
+                                                                                       \
+    ({                                                                                 \
+        static void *objp;                                                             \
+        objp = _z_tool_calloc((num), (sz), (__FILE__), (__FUNCTION__), (__LINE__), &objp); \
+        objp;                                                                          \
+    })
+
+#define z_tool_strdup(s)                                                           \
+                                                                               \
+    ({                                                                         \
+        static void *objp;                                                     \
+        objp = _z_tool_strdup((s), (__FILE__), (__FUNCTION__), (__LINE__), &objp); \
+        objp;                                                                  \
+    })
+
+
+ void *_z_tool_malloc(unsigned int size, const char *file, const char *function, unsigned int line, void *addr);
+ void *_z_tool_realloc(void *old_ptr, unsigned int size, const char *file, const char *function, unsigned int line, void *addr);
+ void _z_tool_free(void *ptr, const char *file, const char *function, unsigned int line);
+ void *_z_tool_calloc(unsigned int num, unsigned int size, const char *file, const char *function, unsigned int line, void *addr);
+ void *_z_tool_strdup(const char *s, const char *file, const char *function, unsigned int line, void *addr);
+void z_tool_malloc_info(void);
 
 #ifdef __cplusplus
 }

@@ -4,9 +4,8 @@
 #include "z_thpool.h"
 #include "z_table_print.h"
 
-#include <pthread.h>
 
-#define Z_THPOOL_VERION "0.0.2.0"
+#define Z_THPOOL_VERION "0.0.3.0"
 
 // Structure to hold thread pool message details
 struct z_thpool_msg_struct {
@@ -55,10 +54,11 @@ int32_t z_thpool_create(struct z_thpool_config_struct *p_config, z_thpool_handle
         goto error0;
     }
 
-    struct z_thpool_mng_struct *p_mng = (struct z_thpool_mng_struct *)calloc(1, sizeof(struct z_thpool_mng_struct));
+    struct z_thpool_mng_struct *p_mng = (struct z_thpool_mng_struct *)z_tool_malloc(sizeof(struct z_thpool_mng_struct));
     if (!p_mng) {
         goto error0;
     }
+    memset(p_mng, 0, sizeof(struct z_thpool_mng_struct));
 
     // Initialize mutex and condition variable
     if (pthread_mutex_init(&p_mng->mutex, NULL) != 0) {
@@ -112,7 +112,7 @@ error3:
 error2:
     pthread_mutex_destroy(&p_mng->mutex);
 error1:
-    free(p_mng);
+    z_tool_free(p_mng);
 error0:
     Z_DEBUG_EXIT(ret);
     return ret;
@@ -152,7 +152,7 @@ int32_t z_thpool_destroy(z_thpool_handle_t handle) {
     z_kfifo_free(&p_mng->t_info);
     pthread_mutex_destroy(&p_mng->mutex);
     pthread_cond_destroy(&p_mng->cond);
-    free(p_mng);
+    z_tool_free(p_mng);
 
     ret = 0;
     Z_DEBUG_EXIT(0);

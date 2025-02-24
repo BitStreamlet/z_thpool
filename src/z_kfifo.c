@@ -17,11 +17,11 @@ int z_kfifo_malloc(struct z_kfifo_struct *p_fifo, uint32_t size) {
 
     // Round up size to the nearest power of two if it's not already.
     if (size & (size - 1)) {
-        size = Z_TOOL_roundup_pow_of_two(size);
+        size = Z_TOOL_ROUNDUP_POW_OF_TWO(size);
     }
 
     // Allocate memory for the buffer.
-    p_buffer = (uint8_t *)malloc(size);
+    p_buffer = (uint8_t *)z_tool_malloc(size);
     if (!p_buffer) {
         z_kfifo_init(p_fifo, NULL, 0); // Reset fifo if allocation fails.
         return -1;                     // Return error if memory allocation fails.
@@ -36,7 +36,7 @@ int z_kfifo_malloc(struct z_kfifo_struct *p_fifo, uint32_t size) {
 void z_kfifo_free(struct z_kfifo_struct *p_fifo) {
     if (!p_fifo) return; // Exit if the fifo pointer is null.
     if (p_fifo->p_buffer) {
-        free(p_fifo->p_buffer); // Free the allocated buffer.
+        z_tool_free(p_fifo->p_buffer); // Free the allocated buffer.
     }
     z_kfifo_init(p_fifo, NULL, 0); // Reset the fifo structure.
 }
